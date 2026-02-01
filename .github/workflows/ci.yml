@@ -18,7 +18,7 @@ jobs:
       - name: Run clang-format
         run: |
           clang-format --version
-          FILES=$(find src include tests -name '*.cpp' -o -name '*.hpp' -o -name '*.h')
+          FILES=$(find . -name '*.cpp' -o -name '*.hpp' -o -name '*.h')
           if [ -n "$FILES" ]; then
             clang-format -n -Werror $FILES
           fi
