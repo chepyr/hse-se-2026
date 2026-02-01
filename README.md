@@ -1,4 +1,7 @@
-# hse-se-2026
+![CI](https://github.com/chepyr/hse-se-2026/actions/workflows/ci.yml/badge.svg)
+![License](https://img.shields.io/badge/license-MIT-green)
+![C++](https://img.shields.io/badge/C%2B%2B-17-blue)
+![CMake](https://img.shields.io/badge/CMake-3.16+-orange)
 
 # CLI Shell Interpreter (C++)
 
@@ -27,6 +30,29 @@
 - пайплайны `|`
 - запуск внешних программ
 - переменные окружения
+
+## Пример использования
+
+```bash
+$ ./shell
+> echo "Hello, world!"
+Hello, world!
+
+> FILE=example.txt
+> cat $FILE
+Some example text
+
+> cat example.txt | wc
+1 3 18
+
+> echo 123 | wc
+1 1 3
+
+> pwd
+/home/user/projects/cli-shell
+
+> exit
+```
 
 ## Архитектура
 
@@ -74,3 +100,8 @@ cd build
 cmake ..
 make
 ```
+
+## Contributing
+
+Проект учебный, но предложения по улучшению приветствуются.  
+Любой желающий может создавать issues и pull requests.
