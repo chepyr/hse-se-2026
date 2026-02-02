@@ -33,7 +33,7 @@
 Требования к архитектуре:
 - легко добавлять новые команды;
 - чёткое разграничение ответственности;
-- компонентная структура (не «клубок классов»);
+- компонентная структура;
 - подробное словесное описание работы системы.
 
 Основные архитектурные принципы:
@@ -57,7 +57,7 @@
 ### 1. Component Diagram
 
 Отражает общую компонентную структуру системы.  
-Показывает основные модули интерпретатора (Shell, Frontend, Executor, Environment, Builtin Registry, AST) и направления их взаимодействия.  
+Показывает основные модули интерпретатора (Shell, Input Processor, Executor, Environment, Builtin Registry, AST) и направления их взаимодействия.  
 Используется для демонстрации разграничения ответственности между подсистемами и принципа «проектирование сверху вниз».
 
 ### 2. Main Flow Diagram
@@ -129,7 +129,7 @@ struct CommandSpec {
 
 ```cpp
 struct Assignment {
-    std::string name;  // [A-Za-z_][A-Za-z0-9_]*
+    std::string name;  
     std::string value; // после обработки кавычек и $ подстановок
 };
 ```
@@ -138,11 +138,11 @@ struct Assignment {
 - `NAME=VALUE` в строке без команды обновляет `Environment` интерпретатора.
 - Если встречено `NAME=` — значение становится пустой строкой.
 
-## 5. Frontend: лексический анализ, кавычки и подстановки, синтаксис пайпов
+## 5. Input Processor: лексический анализ, кавычки и подстановки, синтаксис пайпов
 
-### 5.1 Задача Frontend
+### 5.1 Задача Input Processor
 
-Frontend отвечает за:
+Input Processor отвечает за:
 - корректное распознавание границ слов (аргументов) с учётом кавычек;
 - распознавание `|` как оператора пайпа только вне кавычек;
 - выполнение подстановок `$NAME` с учётом режима quoting;
@@ -239,14 +239,14 @@ word       := WordToken token from lexer
 - незакрытые кавычки → ошибка `unterminated quote`.
 
 Поведение на пустую строку:
-- если после trim строка пустая → Frontend возвращает “no-op”, Executor не вызывается.
+- если после trim строка пустая → Input Processor возвращает “no-op”, Executor не вызывается.
 
 ## 6. Environment: хранение и модификация окружения
 
 ### 6.1 Назначение
 
 `Environment` хранит переменные shell. Он нужен для:
-- подстановок `$NAME` в Frontend;
+- подстановок `$NAME` в Input Processor;
 - присваиваний `NAME=VALUE`;
 - формирования окружения для `execve` внешних программ.
 
@@ -258,7 +258,7 @@ public:
     std::string get(const std::string& name) const;         // отсутствует -> ""
     bool has(const std::string& name) const;
 
-    void set(const std::string& name, std::string value);   // обновить/создать
+    void set(const std::string& name, std::string value);   
 
     // Для execve: возвращает массив строк "NAME=VALUE"
     std::vector<std::string> snapshot() const;
@@ -285,7 +285,7 @@ private:
 
 ```cpp
 struct ExecResult {
-    int exit_code;     // 0..255
+    int exit_code;     
     bool request_exit; // true, если нужно завершить REPL (только builtin exit в parent)
 };
 ```
@@ -301,7 +301,7 @@ enum class ExecKind { AssignmentOnly, Builtin, External };
 struct ExecUnit {
     ExecKind kind;
     std::vector<std::string> argv;       // для Builtin/External
-    std::vector<Assignment> prefix_env;  // overlay окружения для этой команды (может быть пустым)
+    std::vector<Assignment> prefix_env;  // overlay окружения для этой команды 
 };
 ```
 
@@ -445,7 +445,7 @@ Builtin внутри pipeline исполняется в child:
 
 ### 7.5 Разделение аргументов и входного потока
 
-- `argv` — список аргументов команды, формируется Frontend.
+- `argv` — список аргументов команды, формируется Input Processor.
 - stdin — поток данных для команд в пайпе.
 
 Реализация builtins следует правилам:
@@ -469,7 +469,7 @@ Builtin внутри pipeline исполняется в child:
 Добавление новой встроенной команды сводится к:
 - реализации функции-обработчика;
 - регистрации в `BuiltinRegistry`;
-без изменений в Frontend/Executor (кроме списка регистраций при старте).
+без изменений в Input Processor/Executor (кроме списка регистраций при старте).
 
 ### 8.2 Интерфейс реестра
 
@@ -497,11 +497,11 @@ private:
 
 ## 9. Обработка ошибок и коды возврата
 
-### 9.1 Ошибки Frontend
+### 9.1 Ошибки Input Processor
 - незакрытые кавычки → сообщение в stderr, `exit_code = 2`;
 - некорректный pipe (`|` без команды слева/справа) → stderr, `exit_code = 2`.
 
-Frontend возвращает ошибку в структурированном виде (например, `expected<Pipeline, ParseError>`), а REPL печатает её.
+Input Processor возвращает ошибку в структурированном виде (например, `expected<Pipeline, ParseError>`), а REPL печатает её.
 
 ### 9.2 Ошибки выполнения
 Рекомендованная политика кодов (приближённая к shell-практике):
@@ -529,7 +529,7 @@ Frontend возвращает ошибку в структурированном
 1. выводит prompt (`> `);
 2. читает строку; при EOF завершает цикл REPL (без вызова `exit` builtin).
    Код завершения процесса shell равен `last_exit_code` (или `0`, если ещё ничего не выполнялось);
-3. вызывает `Frontend::parse(line, env)`:
+3. вызывает `Input Processor::parse(line, env)`:
    - пустая строка → continue;
    - ошибка → печатает, continue;
 4. вызывает `Executor::run(pipeline, env)`:
