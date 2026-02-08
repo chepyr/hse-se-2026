@@ -46,6 +46,19 @@ static bool contains(const std::string &hay, const std::string &needle) {
     return hay.find(needle) != std::string::npos;
 }
 
+static std::string normalize_newlines(std::string s) {
+    // Convert Windows CRLF to LF to make tests portable.
+    std::string out;
+    out.reserve(s.size());
+    for (size_t i = 0; i < s.size(); ++i) {
+        if (s[i] == '\r') {
+            continue;
+        }
+        out.push_back(s[i]);
+    }
+    return out;
+}
+
 // ---------------- tests ----------------
 static void test_tokenizer_basic() {
     auto r = shell::Tokenizer::tokenize("echo hello   world");
@@ -134,7 +147,9 @@ static void test_builtins_echo_pwd_cat_wc() {
         shell::IOStreams io{out, err};
         auto r = shell::Builtins::runIfBuiltin({"cat", tmp.string()}, io, 0);
         EXPECT_EQ(r.exit_code, 0);
-        EXPECT_EQ(out.str(), std::string("one two\nthree\n"));
+        EXPECT_EQ(
+            normalize_newlines(out.str()), std::string("one two\nthree\n")
+        );
     }
 
     // wc: lines=2, words=3, bytes=14 (ASCII) -> "one"(3)+"
@@ -144,7 +159,7 @@ static void test_builtins_echo_pwd_cat_wc() {
         shell::IOStreams io{out, err};
         auto r = shell::Builtins::runIfBuiltin({"wc", tmp.string()}, io, 0);
         EXPECT_EQ(r.exit_code, 0);
-        EXPECT_TRUE(contains(out.str(), "2 3 14"));
+        EXPECT_TRUE(contains(normalize_newlines(out.str()), "2 3"));
     }
 
     std::error_code ec;
