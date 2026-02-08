@@ -241,7 +241,9 @@ static void test_builtins_errors() {
     {
         std::ostringstream out, err;
         shell::IOStreams io{out, err};
-        auto r = shell::Builtins::runIfBuiltin({"wc", "___definitely_missing_file___"}, io, 0);
+        auto r = shell::Builtins::runIfBuiltin(
+            {"wc", "___definitely_missing_file___"}, io, 0
+        );
         EXPECT_TRUE(r.exit_code != 0);
         EXPECT_TRUE(!err.str().empty());
     }
@@ -253,15 +255,12 @@ static void test_external_runner_unknown_command() {
     shell::IOStreams io{out, err};
 
     auto r = shell::ExternalRunner::run(
-        {"___definitely_missing_executable___"},
-        env.snapshot(),
-        io
+        {"___definitely_missing_executable___"}, env.snapshot(), io
     );
 
     EXPECT_TRUE(r.exit_code != 0);
     EXPECT_TRUE(!err.str().empty());
 }
-
 
 // ---------------- main ----------------
 int main() {
@@ -275,7 +274,6 @@ int main() {
     test_parse_assignment_empty_value();
     test_builtins_errors();
     test_external_runner_unknown_command();
-
 
     if (g_failed == 0) {
         std::cerr << "[OK] all tests passed\n";

@@ -34,10 +34,12 @@ static void writeAllFromFdToStream(int fd, std::ostream &os, std::mutex &mtx) {
     }
 }
 
-static void setChildEnvironment(const std::vector<std::string>& env_snapshot) {
-    for (const std::string& kv : env_snapshot) {
+static void setChildEnvironment(const std::vector<std::string> &env_snapshot) {
+    for (const std::string &kv : env_snapshot) {
         auto pos = kv.find('=');
-        if (pos == std::string::npos) continue;
+        if (pos == std::string::npos) {
+            continue;
+        }
 
         std::string key = kv.substr(0, pos);
         std::string val = kv.substr(pos + 1);
