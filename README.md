@@ -92,14 +92,44 @@ cli-shell/
 ```
 
 
-## Сборка
+## Сборка и запуск
 
+### Linux / macOS
+
+**Сборка:**
 ```bash
-mkdir build
-cd build
-cmake ..
-make
+cmake -S . -B build -DCLI_BUILD_TESTS=ON
+cmake --build build
 ```
+
+**Запуск:**
+```bash
+./build/shell
+```
+
+**Тесты:**
+```bash
+ctest --test-dir build --output-on-failure
+```
+
+### Windows (Visual Studio / MSVC)
+
+**Сборка:**
+```powershell
+cmake -S . -B build -DCLI_BUILD_TESTS=ON
+cmake --build build --config Release
+```
+
+**Запуск (обычно):**
+```powershell
+.\build\Release\shell.exe
+```
+
+**Тесты:**
+```powershell
+ctest --test-dir build -C Release --output-on-failure
+```
+
 
 ## Contributing
 
