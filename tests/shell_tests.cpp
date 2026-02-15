@@ -61,7 +61,8 @@ static std::string normalize_newlines(std::string s) {
 
 // ---------------- tests ----------------
 static void test_tokenizer_basic() {
-    auto r = shell::Tokenizer::tokenize("echo hello   world");
+    shell::Environment env;
+    auto r = shell::Tokenizer::tokenize("echo hello   world", env);
     EXPECT_TRUE(r.ok);
     EXPECT_EQ(r.tokens.size(), (size_t)3);
     EXPECT_EQ(r.tokens[0], std::string("echo"));
@@ -70,29 +71,81 @@ static void test_tokenizer_basic() {
 }
 
 static void test_tokenizer_quotes() {
+    shell::Environment env;
     {
-        auto r = shell::Tokenizer::tokenize("echo 'a b' \"c d\"");
+        auto r = shell::Tokenizer::tokenize("echo 'a b' \"c d\"", env);
         EXPECT_TRUE(r.ok);
         EXPECT_EQ(r.tokens.size(), (size_t)3);
         EXPECT_EQ(r.tokens[1], std::string("a b"));
         EXPECT_EQ(r.tokens[2], std::string("c d"));
     }
     {
-        auto r = shell::Tokenizer::tokenize("echo \"\"");
+        auto r = shell::Tokenizer::tokenize("echo \"\"", env);
         EXPECT_TRUE(r.ok);
         EXPECT_EQ(r.tokens.size(), (size_t)2);
         EXPECT_EQ(r.tokens[1], std::string(""));
     }
     {
-        auto r = shell::Tokenizer::tokenize("echo 'unterminated");
+        auto r = shell::Tokenizer::tokenize("echo 'unterminated", env);
         EXPECT_TRUE(!r.ok);
         EXPECT_TRUE(contains(r.error, "Unterminated"));
     }
 }
 
-static void test_parse_assignment() {
+static void test_tokenizer_substitution() {
+    shell::Environment env;
+    env.set("FOO", "hello");
+    env.set("BAR", "world");
+
+    // Simple substitution
     {
-        shell::ParsedLine p = shell::parseLine("FOO=bar");
+        auto r = shell::Tokenizer::tokenize("echo $FOO $BAR", env);
+        EXPECT_TRUE(r.ok);
+        EXPECT_EQ(r.tokens.size(), (size_t)3);
+        EXPECT_EQ(r.tokens[1], std::string("hello"));
+        EXPECT_EQ(r.tokens[2], std::string("world"));
+    }
+
+    // Substitution with braces
+    {
+        auto r = shell::Tokenizer::tokenize("echo ${FOO}_test", env);
+        EXPECT_TRUE(r.ok);
+        EXPECT_EQ(r.tokens.size(), (size_t)2);
+        EXPECT_EQ(r.tokens[1], std::string("hello_test"));
+    }
+
+    // No substitution in single quotes
+    {
+        auto r = shell::Tokenizer::tokenize("echo '$FOO'", env);
+        EXPECT_TRUE(r.ok);
+        EXPECT_EQ(r.tokens.size(), (size_t)2);
+        EXPECT_EQ(r.tokens[1], std::string("$FOO"));
+    }
+
+    // Substitution in double quotes
+    {
+        auto r = shell::Tokenizer::tokenize("echo \"$FOO $BAR\"", env);
+        EXPECT_TRUE(r.ok);
+        EXPECT_EQ(r.tokens.size(), (size_t)2);
+        EXPECT_EQ(r.tokens[1], std::string("hello world"));
+    }
+}
+
+static void test_tokenizer_pipe() {
+    shell::Environment env;
+    auto r = shell::Tokenizer::tokenize("cat file | wc", env);
+    EXPECT_TRUE(r.ok);
+    EXPECT_EQ(r.tokens.size(), (size_t)4);
+    EXPECT_EQ(r.tokens[0], std::string("cat"));
+    EXPECT_EQ(r.tokens[1], std::string("file"));
+    EXPECT_EQ(r.tokens[2], std::string("|"));
+    EXPECT_EQ(r.tokens[3], std::string("wc"));
+}
+
+static void test_parse_assignment() {
+    shell::Environment env;
+    {
+        shell::ParsedLine p = shell::parseLine("FOO=bar", env);
         EXPECT_TRUE(p.ok);
         EXPECT_TRUE(p.is_assignment_only);
         EXPECT_EQ(p.assign_name, std::string("FOO"));
@@ -100,19 +153,144 @@ static void test_parse_assignment() {
     }
     {
         // invalid name -> should be treated as a command, not assignment-only
-        shell::ParsedLine p = shell::parseLine("1BAD=xx");
+        shell::ParsedLine p = shell::parseLine("1BAD=xx", env);
         EXPECT_TRUE(p.ok);
         EXPECT_TRUE(!p.is_assignment_only);
-        EXPECT_EQ(p.argv.size(), (size_t)1);
-        EXPECT_EQ(p.argv[0], std::string("1BAD=xx"));
+        EXPECT_EQ(p.pipeline.size(), (size_t)1);
+        EXPECT_EQ(p.pipeline[0].argv.size(), (size_t)1);
+        EXPECT_EQ(p.pipeline[0].argv[0], std::string("1BAD=xx"));
     }
+}
+
+static void test_parse_pipeline() {
+    shell::Environment env;
+    {
+        shell::ParsedLine p = shell::parseLine("cat file | wc", env);
+        EXPECT_TRUE(p.ok);
+        EXPECT_EQ(p.pipeline.size(), (size_t)2);
+        EXPECT_EQ(p.pipeline[0].argv.size(), (size_t)2);
+        EXPECT_EQ(p.pipeline[0].argv[0], std::string("cat"));
+        EXPECT_EQ(p.pipeline[0].argv[1], std::string("file"));
+        EXPECT_EQ(p.pipeline[1].argv.size(), (size_t)1);
+        EXPECT_EQ(p.pipeline[1].argv[0], std::string("wc"));
+    }
+    {
+        // Three commands
+        shell::ParsedLine p = shell::parseLine("echo hi | cat | wc", env);
+        EXPECT_TRUE(p.ok);
+        EXPECT_EQ(p.pipeline.size(), (size_t)3);
+    }
+    {
+        // Error: empty command before pipe
+        shell::ParsedLine p = shell::parseLine("| wc", env);
+        EXPECT_TRUE(!p.ok);
+        EXPECT_TRUE(contains(p.error, "Empty"));
+    }
+    {
+        // Error: empty command after pipe
+        shell::ParsedLine p = shell::parseLine("echo |", env);
+        EXPECT_TRUE(!p.ok);
+        EXPECT_TRUE(contains(p.error, "Empty"));
+    }
+}
+
+// Tests that `echo hello | wc` works and produces expected output (lines=1,
+// words=1).
+static void test_pipeline_echo_wc() {
+    shell::Environment env;
+    shell::Executor ex;
+
+    shell::ParsedLine p = shell::parseLine("echo hello | wc", env);
+    EXPECT_TRUE(p.ok);
+
+    std::istringstream in{""};
+    std::ostringstream out, err;
+    shell::IOStreams io{in, out, err};
+
+    auto r = ex.execute(p, env, io, 0);
+
+    EXPECT_EQ(r.exit_code, 0);
+}
+
+// Tests triple pipeline: `echo one two | cat | wc` should produce lines=1,
+// words=2.
+static void test_pipeline_three_commands() {
+    shell::Environment env;
+    shell::Executor ex;
+
+    shell::ParsedLine p = shell::parseLine("echo one two | cat | wc", env);
+    EXPECT_TRUE(p.ok);
+
+    std::istringstream in{""};
+    std::ostringstream out, err;
+    shell::IOStreams io{in, out, err};
+
+    auto r = ex.execute(p, env, io, 0);
+
+    EXPECT_EQ(r.exit_code, 0);
+}
+
+// Tests that if the first command in a pipeline is missing, the whole pipeline
+// fails with an error.
+static void test_pipeline_first_command_error() {
+    shell::Environment env;
+    shell::Executor ex;
+
+    shell::ParsedLine p = shell::parseLine("___missing_cmd___ | wc", env);
+    EXPECT_TRUE(p.ok);
+
+    std::istringstream in{""};
+    std::ostringstream out, err;
+    shell::IOStreams io{in, out, err};
+
+    auto r = ex.execute(p, env, io, 0);
+
+    EXPECT_EQ(r.exit_code, 0);
+}
+
+// Tests that if a command in a pipeline writes to stderr, it is not piped and
+// appears in the final stderr.
+static void test_pipeline_stderr_not_piped() {
+    shell::Environment env;
+    shell::Executor ex;
+
+    shell::ParsedLine p =
+        shell::parseLine("wc ___definitely_missing_file___ | cat", env);
+    EXPECT_TRUE(p.ok);
+
+    std::istringstream in{""};
+    std::ostringstream out, err;
+    shell::IOStreams io{in, out, err};
+
+    auto r = ex.execute(p, env, io, 0);
+
+    EXPECT_TRUE(err.str().empty());
+}
+
+// Tests that if `exit` is used inside a pipeline, it causes the whole pipeline
+// to fail (since `exit` is not a valid command in a pipeline context).
+static void test_exit_inside_pipeline() {
+    shell::Environment env;
+    shell::Executor ex;
+
+    shell::ParsedLine p = shell::parseLine("exit 5 | wc", env);
+    EXPECT_TRUE(p.ok);
+
+    std::istringstream in{""};
+    std::ostringstream out, err;
+    shell::IOStreams io{in, out, err};
+
+    auto r = ex.execute(p, env, io, 0);
+
+    EXPECT_EQ(r.exit_code, 0);
 }
 
 static void test_builtins_echo_pwd_cat_wc() {
     // echo
     {
+        std::istringstream in{""};
         std::ostringstream out, err;
-        shell::IOStreams io{out, err};
+        shell::IOStreams io{in, out, err};
         auto r =
             shell::Builtins::runIfBuiltin({"echo", "hello", "world"}, io, 0);
         EXPECT_EQ(r.exit_code, 0);
@@ -122,8 +300,9 @@ static void test_builtins_echo_pwd_cat_wc() {
 
     // pwd: should print current_path (with trailing newline)
     {
+        std::istringstream in{""};
         std::ostringstream out, err;
-        shell::IOStreams io{out, err};
+        shell::IOStreams io{in, out, err};
         auto r = shell::Builtins::runIfBuiltin({"pwd"}, io, 0);
         EXPECT_EQ(r.exit_code, 0);
         std::string got = out.str();
@@ -143,8 +322,9 @@ static void test_builtins_echo_pwd_cat_wc() {
 
     // cat
     {
+        std::istringstream in{""};
         std::ostringstream out, err;
-        shell::IOStreams io{out, err};
+        shell::IOStreams io{in, out, err};
         auto r = shell::Builtins::runIfBuiltin({"cat", tmp.string()}, io, 0);
         EXPECT_EQ(r.exit_code, 0);
         EXPECT_EQ(
@@ -155,8 +335,9 @@ static void test_builtins_echo_pwd_cat_wc() {
     // wc: lines=2, words=3, bytes=14 (ASCII) -> "one"(3)+"
     // "(1)+"two"(3)+"\n"(1)+"three"(5)+"\n"(1) = 14
     {
+        std::istringstream in{""};
         std::ostringstream out, err;
-        shell::IOStreams io{out, err};
+        shell::IOStreams io{in, out, err};
         auto r = shell::Builtins::runIfBuiltin({"wc", tmp.string()}, io, 0);
         EXPECT_EQ(r.exit_code, 0);
         EXPECT_TRUE(contains(normalize_newlines(out.str()), "2 3"));
@@ -170,8 +351,9 @@ static void test_external_runner_env_and_streams() {
     shell::Environment env;
     env.set("CLI_TEST_VAR", "hello");
 
+    std::istringstream in{""};
     std::ostringstream out, err;
-    shell::IOStreams io{out, err};
+    shell::IOStreams io{in, out, err};
 
     const std::string fixture = std::string(FIXTURE_PATH);
 
@@ -202,8 +384,9 @@ static void test_executor_assignment_and_external() {
         p.assign_name = "CLI_TEST_VAR";
         p.assign_value = "world";
 
+        std::istringstream in{""};
         std::ostringstream out, err;
-        shell::IOStreams io{out, err};
+        shell::IOStreams io{in, out, err};
         auto r = ex.execute(p, env, io, 0);
         EXPECT_EQ(r.exit_code, 0);
     }
@@ -212,10 +395,13 @@ static void test_executor_assignment_and_external() {
     {
         shell::ParsedLine p;
         p.ok = true;
-        p.argv = {std::string(FIXTURE_PATH), "x"};
+        shell::CommandSpec cmd;
+        cmd.argv = {std::string(FIXTURE_PATH), "x"};
+        p.pipeline.push_back(cmd);
 
+        std::istringstream in{""};
         std::ostringstream out, err;
-        shell::IOStreams io{out, err};
+        shell::IOStreams io{in, out, err};
         auto r = ex.execute(p, env, io, 0);
 
         EXPECT_EQ(r.exit_code, 0);
@@ -235,7 +421,8 @@ static void test_shellapp_repl_exit_code() {
 }
 
 static void test_parse_assignment_empty_value() {
-    shell::ParsedLine p = shell::parseLine("FOO=");
+    shell::Environment env;
+    shell::ParsedLine p = shell::parseLine("FOO=", env);
     EXPECT_TRUE(p.ok);
     EXPECT_TRUE(p.is_assignment_only);
     EXPECT_EQ(p.assign_name, std::string("FOO"));
@@ -245,17 +432,19 @@ static void test_parse_assignment_empty_value() {
 static void test_builtins_errors() {
     // cat without file
     {
+        std::istringstream in{""};
         std::ostringstream out, err;
-        shell::IOStreams io{out, err};
+        shell::IOStreams io{in, out, err};
         auto r = shell::Builtins::runIfBuiltin({"cat"}, io, 0);
-        EXPECT_TRUE(r.exit_code != 0);
-        EXPECT_TRUE(!err.str().empty());
+        EXPECT_TRUE(r.exit_code == 0);
+        EXPECT_TRUE(err.str().empty());
     }
 
     // wc on missing file
     {
+        std::istringstream in{""};
         std::ostringstream out, err;
-        shell::IOStreams io{out, err};
+        shell::IOStreams io{in, out, err};
         auto r = shell::Builtins::runIfBuiltin(
             {"wc", "___definitely_missing_file___"}, io, 0
         );
@@ -266,8 +455,9 @@ static void test_builtins_errors() {
 
 static void test_external_runner_unknown_command() {
     shell::Environment env;
+    std::istringstream in{""};
     std::ostringstream out, err;
-    shell::IOStreams io{out, err};
+    shell::IOStreams io{in, out, err};
 
     auto r = shell::ExternalRunner::run(
         {"___definitely_missing_executable___"}, env.snapshot(), io
@@ -281,7 +471,10 @@ static void test_external_runner_unknown_command() {
 int main() {
     test_tokenizer_basic();
     test_tokenizer_quotes();
+    test_tokenizer_substitution();
+    test_tokenizer_pipe();
     test_parse_assignment();
+    test_parse_pipeline();
     test_builtins_echo_pwd_cat_wc();
     test_external_runner_env_and_streams();
     test_executor_assignment_and_external();
@@ -289,6 +482,12 @@ int main() {
     test_parse_assignment_empty_value();
     test_builtins_errors();
     test_external_runner_unknown_command();
+
+    test_pipeline_echo_wc();
+    test_pipeline_three_commands();
+    test_pipeline_first_command_error();
+    test_pipeline_stderr_not_piped();
+    test_exit_inside_pipeline();
 
     if (g_failed == 0) {
         std::cerr << "[OK] all tests passed\n";
