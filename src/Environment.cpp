@@ -94,6 +94,14 @@ void Environment::set(const std::string &name, const std::string &value) {
     vars_[name] = value;
 }
 
+std::string Environment::get(const std::string &name) const {
+    auto it = vars_.find(name);
+    if (it != vars_.end()) {
+        return it->second;
+    }
+    return "";
+}
+
 std::vector<std::string> Environment::snapshot() const {
     std::vector<std::string> out;
     out.reserve(vars_.size());
