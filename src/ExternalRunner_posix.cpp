@@ -146,4 +146,30 @@ CommandResult ExternalRunner::run(
     return {code, false};
 }
 
+void ExternalRunner::execInChild(
+    const std::vector<std::string> &argv,
+    const std::vector<std::string> &env_snapshot
+) {
+    if (argv.empty()) {
+        _exit(2);
+    }
+
+    setChildEnvironment(env_snapshot);
+
+    std::vector<char *> cargv;
+    cargv.reserve(argv.size() + 1);
+    for (const auto &s : argv) {
+        cargv.push_back(const_cast<char *>(s.c_str()));
+    }
+    cargv.push_back(nullptr);
+
+    ::execvp(cargv[0], cargv.data());
+
+    // exec failed
+    const char *msg = std::strerror(errno);
+    ::write(STDERR_FILENO, msg, std::strlen(msg));
+    ::write(STDERR_FILENO, "\n", 1);
+    _exit(127);
+}
+
 }  // namespace shell

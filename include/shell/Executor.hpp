@@ -12,6 +12,9 @@ namespace shell {
  * @brief I/O streams used by commands.
  */
 struct IOStreams final {
+    /** @brief Command standard input stream. */
+    std::istream &in;
+    
     /** @brief Command standard output stream. */
     std::ostream &out;
 
