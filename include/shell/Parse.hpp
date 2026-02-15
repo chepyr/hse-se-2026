@@ -5,11 +5,22 @@
 namespace shell {
 
 /**
- * @brief Parsed representation of a single input line for HW2.
+ * @brief Single command in a pipeline.
  *
- * HW2 supports only:
- * - either an assignment-only line: NAME=VALUE
- * - or a single command (argv)
+ * Each command consists of arguments (argv-style).
+ */
+struct CommandSpec final {
+    /** @brief Command arguments (argv-style). */
+    std::vector<std::string> argv;
+};
+
+/**
+ * @brief Parsed representation of a single input line.
+ *
+ * Supports:
+ * - assignment-only line: NAME=VALUE
+ * - single command: cmd arg1 arg2
+ * - pipeline: cmd1 | cmd2 | cmd3
  */
 struct ParsedLine final {
     /** @brief True if parsing succeeded. */
@@ -31,15 +42,19 @@ struct ParsedLine final {
     /** @brief Assignment value (if is_assignment_only). */
     std::string assign_value;
 
-    /** @brief Command argv (if not assignment and not empty). */
-    std::vector<std::string> argv;
+    /** @brief Commands in the pipeline. 
+     * For a single command, pipeline.size() == 1.
+     * For a pipeline like "cmd1 | cmd2", pipeline.size() == 2.
+     */
+    std::vector<CommandSpec> pipeline;
 };
 
 /**
  * @brief Parses a single input line into ParsedLine.
  * @param line Raw input line.
+ * @param env Environment for variable substitution.
  * @return ParsedLine structure.
  */
-ParsedLine parseLine(const std::string &line);
+ParsedLine parseLine(const std::string &line, const class Environment &env);
 
 }  // namespace shell

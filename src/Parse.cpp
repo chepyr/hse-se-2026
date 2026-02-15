@@ -1,5 +1,6 @@
 #include "shell/Parse.hpp"
 #include <cstddef>
+#include "shell/Environment.hpp"
 #include "shell/Tokenizer.hpp"
 #include "shell/Utils.hpp"
 
@@ -24,11 +25,11 @@ static bool isAssignmentOnlyToken(
     return Utils::isValidEnvName(name);
 }
 
-ParsedLine parseLine(const std::string &line) {
+ParsedLine parseLine(const std::string &line, const Environment &env) {
     ParsedLine parsed;
     parsed.ok = false;
 
-    auto t = Tokenizer::tokenize(line);
+    auto t = Tokenizer::tokenize(line, env);
     if (!t.ok) {
         parsed.error = t.error;
         return parsed;
@@ -40,7 +41,7 @@ ParsedLine parseLine(const std::string &line) {
         return parsed;
     }
 
-    // HW2: support assignment-only form NAME=VALUE as a single token line.
+    // HW3: support assignment-only form NAME=VALUE as a single token line.
     if (t.tokens.size() == 1) {
         std::string name, value;
         if (isAssignmentOnlyToken(t.tokens[0], name, value)) {
@@ -52,8 +53,32 @@ ParsedLine parseLine(const std::string &line) {
         }
     }
 
+    // Parse pipeline: split by "|" token
+    std::vector<CommandSpec> commands;
+    CommandSpec current;
+
+    for (const auto &tok : t.tokens) {
+        if (tok == "|") {
+            if (current.argv.empty()) {
+                parsed.error = "Empty command before pipe";
+                return parsed;
+            }
+            commands.push_back(std::move(current));
+            current = CommandSpec{};
+        } else {
+            current.argv.push_back(tok);
+        }
+    }
+
+    // Add final command
+    if (current.argv.empty()) {
+        parsed.error = "Empty command after pipe";
+        return parsed;
+    }
+    commands.push_back(std::move(current));
+
     parsed.ok = true;
-    parsed.argv = std::move(t.tokens);
+    parsed.pipeline = std::move(commands);
     return parsed;
 }
 
