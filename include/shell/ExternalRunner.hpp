@@ -29,8 +29,9 @@ public:
     );
 
     /**
-     * @brief Executes external program in child process (does not return on success).
-     * This is used for pipeline execution where we need exec directly.
+     * @brief Executes external program in child process (does not return on
+     * success). This is used for pipeline execution where we need exec
+     * directly.
      * @param argv argv-style vector: argv[0] is program name/path.
      * @param env_snapshot Environment as a vector of "NAME=VALUE".
      */

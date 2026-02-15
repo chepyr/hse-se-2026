@@ -14,7 +14,7 @@ namespace shell {
 struct IOStreams final {
     /** @brief Command standard input stream. */
     std::istream &in;
-    
+
     /** @brief Command standard output stream. */
     std::ostream &out;
 

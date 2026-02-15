@@ -19,7 +19,8 @@ struct TokenizeResult final {
 };
 
 /**
- * @brief Splits a command line into tokens, supporting quotes and variable substitution.
+ * @brief Splits a command line into tokens, supporting quotes and variable
+ * substitution.
  *
  * This tokenizer supports:
  * - Whitespace splitting outside quotes
@@ -38,10 +39,8 @@ public:
      * @param env Environment for variable substitution.
      * @return TokenizeResult with tokens or an error.
      */
-    static TokenizeResult tokenize(
-        const std::string &line,
-        const class Environment &env
-    );
+    static TokenizeResult
+    tokenize(const std::string &line, const class Environment &env);
 };
 
 }  // namespace shell

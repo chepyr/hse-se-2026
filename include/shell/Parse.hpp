@@ -42,7 +42,7 @@ struct ParsedLine final {
     /** @brief Assignment value (if is_assignment_only). */
     std::string assign_value;
 
-    /** @brief Commands in the pipeline. 
+    /** @brief Commands in the pipeline.
      * For a single command, pipeline.size() == 1.
      * For a pipeline like "cmd1 | cmd2", pipeline.size() == 2.
      */
