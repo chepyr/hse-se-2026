@@ -5,6 +5,22 @@
 
 namespace shell {
 
+// Helper to check if there's an unclosed quote
+static bool hasUnclosedQuote(const std::string &str) {
+    bool in_single = false;
+    bool in_double = false;
+    
+    for (char ch : str) {
+        if (ch == '\'' && !in_double) {
+            in_single = !in_single;
+        } else if (ch == '"' && !in_single) {
+            in_double = !in_double;
+        }
+    }
+    
+    return in_single || in_double;
+}
+
 ShellApp::ShellApp(std::istream &in, std::ostream &out, std::ostream &err)
     : in_(in), out_(out), err_(err), env_(), executor_() {
 }
@@ -26,8 +42,20 @@ int ShellApp::run() {
             return last_exit_code_;
         }
 
-        ParsedLine parsed = parseLine(line);
-        IOStreams io{out_, err_};
+        // Support multi-line input if quote is not closed
+        while (hasUnclosedQuote(line)) {
+            std::string next_line;
+            if (Utils::isInteractiveStdin()) {
+                out_ << "  " << std::flush;  // Continuation prompt
+            }
+            if (!std::getline(in_, next_line)) {
+                break;  // EOF while in multi-line
+            }
+            line += '\n' + next_line;
+        }
+
+        ParsedLine parsed = parseLine(line, env_);
+        IOStreams io{in_, out_, err_};
 
         CommandResult res =
             executor_.execute(parsed, env_, io, last_exit_code_);
