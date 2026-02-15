@@ -94,7 +94,7 @@ Builtins::cmdCat(const std::vector<std::string> &argv, IOStreams io) {
         io.out << io.in.rdbuf();
         return {0, false};
     }
-    
+
     if (argv.size() != 2) {
         io.err << "cat: expected zero or one file argument\n";
         return {2, false};
@@ -115,7 +115,7 @@ CommandResult
 Builtins::cmdWc(const std::vector<std::string> &argv, IOStreams io) {
     std::istream *input = nullptr;
     std::ifstream file_in;
-    
+
     // If no arguments, read from stdin (useful in pipelines)
     if (argv.size() == 1) {
         input = &io.in;

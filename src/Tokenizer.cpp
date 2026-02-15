@@ -1,6 +1,6 @@
 #include "shell/Tokenizer.hpp"
-#include "shell/Environment.hpp"
 #include <cctype>
+#include "shell/Environment.hpp"
 
 namespace shell {
 
@@ -10,11 +10,8 @@ static bool isVarChar(char c) {
 }
 
 // Helper: expand variable reference
-static std::string expandVar(
-    const std::string &line,
-    size_t &i,
-    const Environment &env
-) {
+static std::string
+expandVar(const std::string &line, size_t &i, const Environment &env) {
     // We're at $ character
     ++i;
     if (i >= line.size()) {
@@ -41,18 +38,16 @@ static std::string expandVar(
         varname.push_back(line[i]);
         ++i;
     }
-    
+
     if (varname.empty()) {
         return "$";  // Just $ with no var name
     }
-    
+
     return env.get(varname);
 }
 
-TokenizeResult Tokenizer::tokenize(
-    const std::string &line,
-    const Environment &env
-) {
+TokenizeResult
+Tokenizer::tokenize(const std::string &line, const Environment &env) {
     TokenizeResult res;
     res.ok = false;
 
@@ -81,7 +76,7 @@ TokenizeResult Tokenizer::tokenize(
                 tokens.push_back("|");
                 continue;
             }
-            
+
             // Check for quotes
             if (ch == '\'') {
                 st = State::InSingle;
@@ -93,13 +88,13 @@ TokenizeResult Tokenizer::tokenize(
                 have_token = true;
                 continue;
             }
-            
+
             // Check for whitespace
             if (std::isspace(static_cast<unsigned char>(ch)) != 0) {
                 push_token();
                 continue;
             }
-            
+
             // Check for variable substitution
             if (ch == '$') {
                 std::string value = expandVar(line, i, env);
@@ -108,11 +103,11 @@ TokenizeResult Tokenizer::tokenize(
                 --i;  // expandVar leaves i one position past last char
                 continue;
             }
-            
+
             // Regular character
             cur.push_back(ch);
             have_token = true;
-            
+
         } else if (st == State::InSingle) {
             // Inside single quotes - no substitution
             if (ch == '\'') {
@@ -121,14 +116,14 @@ TokenizeResult Tokenizer::tokenize(
             }
             cur.push_back(ch);
             have_token = true;
-            
+
         } else {  // InDouble
             // Inside double quotes - with substitution
             if (ch == '"') {
                 st = State::Normal;
                 continue;
             }
-            
+
             // Check for variable substitution in double quotes
             if (ch == '$') {
                 std::string value = expandVar(line, i, env);
@@ -137,7 +132,7 @@ TokenizeResult Tokenizer::tokenize(
                 --i;  // expandVar leaves i one position past last char
                 continue;
             }
-            
+
             cur.push_back(ch);
             have_token = true;
         }

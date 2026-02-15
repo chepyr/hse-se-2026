@@ -9,7 +9,7 @@ namespace shell {
 static bool hasUnclosedQuote(const std::string &str) {
     bool in_single = false;
     bool in_double = false;
-    
+
     for (char ch : str) {
         if (ch == '\'' && !in_double) {
             in_single = !in_single;
@@ -17,7 +17,7 @@ static bool hasUnclosedQuote(const std::string &str) {
             in_double = !in_double;
         }
     }
-    
+
     return in_single || in_double;
 }
 
