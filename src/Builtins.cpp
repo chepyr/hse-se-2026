@@ -89,8 +89,14 @@ CommandResult Builtins::cmdPwd(IOStreams io) {
 
 CommandResult
 Builtins::cmdCat(const std::vector<std::string> &argv, IOStreams io) {
+    // If no arguments, read from stdin (useful in pipelines)
+    if (argv.size() == 1) {
+        io.out << io.in.rdbuf();
+        return {0, false};
+    }
+    
     if (argv.size() != 2) {
-        io.err << "cat: expected exactly one file argument\n";
+        io.err << "cat: expected zero or one file argument\n";
         return {2, false};
     }
 
@@ -107,16 +113,23 @@ Builtins::cmdCat(const std::vector<std::string> &argv, IOStreams io) {
 
 CommandResult
 Builtins::cmdWc(const std::vector<std::string> &argv, IOStreams io) {
-    if (argv.size() != 2) {
-        io.err << "wc: expected exactly one file argument\n";
+    std::istream *input = nullptr;
+    std::ifstream file_in;
+    
+    // If no arguments, read from stdin (useful in pipelines)
+    if (argv.size() == 1) {
+        input = &io.in;
+    } else if (argv.size() == 2) {
+        const std::string &path = argv[1];
+        file_in.open(path, std::ios::binary);
+        if (!file_in) {
+            io.err << "wc: " << path << ": cannot open file\n";
+            return {1, false};
+        }
+        input = &file_in;
+    } else {
+        io.err << "wc: expected zero or one file argument\n";
         return {2, false};
-    }
-
-    const std::string &path = argv[1];
-    std::ifstream in(path, std::ios::binary);
-    if (!in) {
-        io.err << "wc: " << path << ": cannot open file\n";
-        return {1, false};
     }
 
     std::uint64_t lines = 0;
@@ -125,7 +138,7 @@ Builtins::cmdWc(const std::vector<std::string> &argv, IOStreams io) {
 
     bool in_word = false;
     char ch;
-    while (in.get(ch)) {
+    while (input->get(ch)) {
         ++bytes;
         if (ch == '\n') {
             ++lines;
