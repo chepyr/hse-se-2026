@@ -39,7 +39,6 @@ public:
         const std::vector<std::string> &argv,
         const std::vector<std::string> &env_snapshot
     );
-
 };
 
 }  // namespace shell
