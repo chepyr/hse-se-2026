@@ -1,4 +1,5 @@
 #include "shell/Executor.hpp"
+#include <array>
 #include <sstream>
 #include "shell/Builtins.hpp"
 #include "shell/ExternalRunner.hpp"
