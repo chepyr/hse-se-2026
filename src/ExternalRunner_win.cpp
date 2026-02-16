@@ -214,14 +214,6 @@ CommandResult ExternalRunner::run(
     return {static_cast<int>(exitCode), false};
 }
 
-#if defined(_WIN32)
-CommandResult executePipelineViaCmd(
-    const std::vector<CommandSpec> &commands,
-    Environment &env,
-    IOStreams io
-);
-#endif
-
 CommandResult executePipelineViaCmd(
     const std::vector<CommandSpec> &commands,
     Environment &env,
