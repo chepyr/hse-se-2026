@@ -143,8 +143,8 @@ CommandResult Executor::execute(
 #if !defined(_WIN32)
         return executePipelinePosix(parsed.pipeline, env, io);
 #else
-        io.err << "Pipeline execution not yet implemented on Windows\n";
-        return {1, false};
+        // Windows: no native pipelines, so we execute the whole pipeline via cmd.exe
+        return executePipelineViaCmd(parsed.pipeline, env, io);
 #endif
     }
 

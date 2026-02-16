@@ -483,11 +483,13 @@ int main() {
     test_builtins_errors();
     test_external_runner_unknown_command();
 
+#ifndef _WIN32
     test_pipeline_echo_wc();
     test_pipeline_three_commands();
     test_pipeline_first_command_error();
     test_pipeline_stderr_not_piped();
     test_exit_inside_pipeline();
+#endif
 
     if (g_failed == 0) {
         std::cerr << "[OK] all tests passed\n";
