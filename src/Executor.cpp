@@ -143,7 +143,8 @@ CommandResult Executor::execute(
 #if !defined(_WIN32)
         return executePipelinePosix(parsed.pipeline, env, io);
 #else
-        // Windows: no native pipelines, so we execute the whole pipeline via cmd.exe
+        // Windows: no native pipelines, so we execute the whole pipeline via
+        // cmd.exe
         return executePipelineViaCmd(parsed.pipeline, env, io);
 #endif
     }

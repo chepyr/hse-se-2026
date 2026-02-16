@@ -215,26 +215,26 @@ CommandResult ExternalRunner::run(
 }
 
 CommandResult executePipelineViaCmd(
-    const std::vector<CommandSpec>& commands,
-    Environment& env,
+    const std::vector<CommandSpec> &commands,
+    Environment &env,
     IOStreams io
 ) {
     std::string full;
 
     for (size_t i = 0; i < commands.size(); ++i) {
-        if (i) full += " | ";
+        if (i) {
+            full += " | ";
+        }
 
         for (size_t j = 0; j < commands[i].argv.size(); ++j) {
-            if (j) full += " ";
+            if (j) {
+                full += " ";
+            }
             full += commands[i].argv[j];
         }
     }
 
-    std::vector<std::string> argv = {
-        "cmd.exe",
-        "/C",
-        full
-    };
+    std::vector<std::string> argv = {"cmd.exe", "/C", full};
 
     ExternalRunner runner;
     return runner.run(argv, env.snapshot(), io);
