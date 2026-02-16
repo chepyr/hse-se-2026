@@ -39,6 +39,14 @@ public:
         const std::vector<std::string> &argv,
         const std::vector<std::string> &env_snapshot
     );
+
+#if defined(_WIN32)
+    CommandResult executePipelineViaCmd(
+        const std::vector<CommandSpec> &commands,
+        Environment &env,
+        IOStreams io
+    );
+#endif
 };
 
 }  // namespace shell

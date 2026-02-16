@@ -267,6 +267,64 @@ static void test_pipeline_stderr_not_piped() {
     EXPECT_TRUE(err.str().empty());
 }
 
+#ifdef _WIN32
+static void test_windows_pipeline_basic() {
+    shell::Environment env;
+    shell::Executor ex;
+
+    shell::ParsedLine p = shell::parseLine("echo hello | findstr hello", env);
+
+    EXPECT_TRUE(p.ok);
+
+    std::istringstream in{""};
+    std::ostringstream out, err;
+    shell::IOStreams io{in, out, err};
+
+    auto r = ex.execute(p, env, io, 0);
+
+    EXPECT_EQ(r.exit_code, 0);
+    EXPECT_TRUE(contains(out.str(), "hello"));
+}
+#endif
+
+#ifdef _WIN32
+static void test_windows_cmd_exit_code() {
+    shell::Environment env;
+    shell::Executor ex;
+
+    shell::ParsedLine p = shell::parseLine("cmd /C exit 7", env);
+
+    EXPECT_TRUE(p.ok);
+
+    std::istringstream in{""};
+    std::ostringstream out, err;
+    shell::IOStreams io{in, out, err};
+
+    auto r = ex.execute(p, env, io, 0);
+
+    EXPECT_EQ(r.exit_code, 7);
+}
+#endif
+
+#ifdef _WIN32
+static void test_windows_stderr() {
+    shell::Environment env;
+    shell::Executor ex;
+
+    shell::ParsedLine p = shell::parseLine("cmd /C dir ___missing___", env);
+
+    EXPECT_TRUE(p.ok);
+
+    std::istringstream in{""};
+    std::ostringstream out, err;
+    shell::IOStreams io{in, out, err};
+
+    auto r = ex.execute(p, env, io, 0);
+
+    EXPECT_TRUE(!err.str().empty());
+}
+#endif
+
 // Tests that if `exit` is used inside a pipeline, it causes the whole pipeline
 // to fail (since `exit` is not a valid command in a pipeline context).
 static void test_exit_inside_pipeline() {
@@ -489,6 +547,12 @@ int main() {
     test_pipeline_first_command_error();
     test_pipeline_stderr_not_piped();
     test_exit_inside_pipeline();
+#endif
+
+#ifdef _WIN32
+    test_windows_pipeline_basic();
+    test_windows_cmd_exit_code();
+    test_windows_stderr();
 #endif
 
     if (g_failed == 0) {
