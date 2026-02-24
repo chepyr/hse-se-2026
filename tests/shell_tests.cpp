@@ -525,6 +525,134 @@ static void test_external_runner_unknown_command() {
     EXPECT_TRUE(!err.str().empty());
 }
 
+// ---------------- grep builtin ----------------
+static void test_grep_basic() {
+    std::istringstream in("line one\nmatch here\nline two\n");
+    std::ostringstream out, err;
+    shell::IOStreams io{in, out, err};
+
+    auto r = shell::Builtins::runIfBuiltin({"grep", "match"}, io, 0);
+    EXPECT_EQ(r.exit_code, 0);
+    EXPECT_EQ(normalize_newlines(out.str()), std::string("match here\n"));
+    EXPECT_TRUE(err.str().empty());
+}
+
+static void test_grep_regex() {
+    std::istringstream in("abc\nab\nx\n");
+    std::ostringstream out, err;
+    shell::IOStreams io{in, out, err};
+
+    auto r = shell::Builtins::runIfBuiltin({"grep", "^ab"}, io, 0);
+    EXPECT_EQ(r.exit_code, 0);
+    std::string o = normalize_newlines(out.str());
+    EXPECT_TRUE(contains(o, "abc"));
+    EXPECT_TRUE(contains(o, "ab"));
+    EXPECT_TRUE(!contains(o, "x"));
+}
+
+static void test_grep_case_insensitive() {
+    std::istringstream in("MiNiMaL\nminimal\nMINIMAL\n");
+    std::ostringstream out, err;
+    shell::IOStreams io{in, out, err};
+
+    auto r = shell::Builtins::runIfBuiltin({"grep", "-i", "minimal"}, io, 0);
+    EXPECT_EQ(r.exit_code, 0);
+    std::string o = normalize_newlines(out.str());
+    EXPECT_TRUE(contains(o, "MiNiMaL"));
+    EXPECT_TRUE(contains(o, "minimal"));
+    EXPECT_TRUE(contains(o, "MINIMAL"));
+}
+
+static void test_grep_whole_word() {
+    std::istringstream in("foo bar\nfoobar\nbar foo\n");
+    std::ostringstream out, err;
+    shell::IOStreams io{in, out, err};
+
+    auto r = shell::Builtins::runIfBuiltin({"grep", "-w", "foo"}, io, 0);
+    EXPECT_EQ(r.exit_code, 0);
+    std::string o = normalize_newlines(out.str());
+    EXPECT_TRUE(contains(o, "foo bar"));
+    EXPECT_TRUE(contains(o, "bar foo"));
+    EXPECT_TRUE(!contains(o, "foobar"));
+}
+
+static void test_grep_after_context() {
+    std::istringstream in("a\nb\nX\nc\nd\n");
+    std::ostringstream out, err;
+    shell::IOStreams io{in, out, err};
+
+    auto r = shell::Builtins::runIfBuiltin({"grep", "-A", "1", "X"}, io, 0);
+    EXPECT_EQ(r.exit_code, 0);
+    std::string o = normalize_newlines(out.str());
+    EXPECT_TRUE(contains(o, "X"));
+    EXPECT_TRUE(contains(o, "c"));
+    EXPECT_TRUE(!contains(o, "d"));
+}
+
+static void test_grep_after_context_overlap() {
+    std::istringstream in("line1\nM1\nline3\nM2\nline5\n");
+    std::ostringstream out, err;
+    shell::IOStreams io{in, out, err};
+
+    auto r = shell::Builtins::runIfBuiltin({"grep", "-A", "2", "M"}, io, 0);
+    EXPECT_EQ(r.exit_code, 0);
+    std::string o = normalize_newlines(out.str());
+    EXPECT_TRUE(contains(o, "M1"));
+    EXPECT_TRUE(contains(o, "line3"));
+    EXPECT_TRUE(contains(o, "M2"));
+    EXPECT_TRUE(contains(o, "line5"));
+    size_t line3_count = 0;
+    for (size_t i = 0; i + 5 <= o.size(); ++i) {
+        if (o.substr(i, 5) == "line3") {
+            ++line3_count;
+        }
+    }
+    EXPECT_TRUE(line3_count == 1);
+}
+
+static void test_grep_no_match() {
+    std::istringstream in("a\nb\nc\n");
+    std::ostringstream out, err;
+    shell::IOStreams io{in, out, err};
+
+    auto r = shell::Builtins::runIfBuiltin({"grep", "xyz"}, io, 0);
+    EXPECT_EQ(r.exit_code, 1);
+    EXPECT_TRUE(out.str().empty());
+}
+
+static void test_grep_missing_pattern() {
+    std::istringstream in{""};
+    std::ostringstream out, err;
+    shell::IOStreams io{in, out, err};
+
+    auto r = shell::Builtins::runIfBuiltin({"grep"}, io, 0);
+    EXPECT_EQ(r.exit_code, 2);
+    EXPECT_TRUE(!err.str().empty());
+}
+
+static void test_grep_file() {
+    std::filesystem::path tmp =
+        std::filesystem::temp_directory_path() / "cli_shell_grep_test.txt";
+    {
+        std::ofstream f(tmp);
+        f << "hello\nworld\nhello again\n";
+    }
+
+    std::istringstream in{""};
+    std::ostringstream out, err;
+    shell::IOStreams io{in, out, err};
+
+    auto r =
+        shell::Builtins::runIfBuiltin({"grep", "hello", tmp.string()}, io, 0);
+    EXPECT_EQ(r.exit_code, 0);
+    std::string o = normalize_newlines(out.str());
+    EXPECT_TRUE(contains(o, "hello"));
+    EXPECT_TRUE(contains(o, "hello again"));
+    EXPECT_TRUE(!contains(o, "world"));
+
+    std::filesystem::remove(tmp);
+}
+
 // ---------------- main ----------------
 int main() {
     test_tokenizer_basic();
@@ -540,6 +668,16 @@ int main() {
     test_parse_assignment_empty_value();
     test_builtins_errors();
     test_external_runner_unknown_command();
+
+    test_grep_basic();
+    test_grep_regex();
+    test_grep_case_insensitive();
+    test_grep_whole_word();
+    test_grep_after_context();
+    test_grep_after_context_overlap();
+    test_grep_no_match();
+    test_grep_missing_pattern();
+    test_grep_file();
 
 #ifndef _WIN32
     test_pipeline_echo_wc();

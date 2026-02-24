@@ -32,6 +32,8 @@ private:
     cmdCat(const std::vector<std::string> &argv, IOStreams io);
     static CommandResult
     cmdWc(const std::vector<std::string> &argv, IOStreams io);
+    static CommandResult
+    cmdGrep(const std::vector<std::string> &argv, IOStreams io);
     static CommandResult cmdExit(
         const std::vector<std::string> &argv,
         IOStreams io,

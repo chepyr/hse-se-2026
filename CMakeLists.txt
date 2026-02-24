@@ -7,6 +7,17 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(CLI_BUILD_TESTS "Build unit tests" ON)
 
+# --- CLI11: header-only CLI parser (for grep -w, -i, -A) ---
+include(FetchContent)
+FetchContent_Declare(
+    CLI11
+    GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
+    GIT_TAG v2.4.1
+)
+set(CLI11_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(CLI11_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(CLI11)
+
 # --- Library with all shell implementation ---
 add_library(shell_lib
   src/ShellApp.cpp
@@ -15,8 +26,11 @@ add_library(shell_lib
   src/Environment.cpp
   src/Executor.cpp
   src/Builtins.cpp
+  src/Grep.cpp
   src/Utils.cpp
 )
+
+target_link_libraries(shell_lib PUBLIC CLI11::CLI11)
 
 # Platform-specific external runner
 if (WIN32)
