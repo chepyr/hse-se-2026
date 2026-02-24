@@ -4,6 +4,7 @@
 #include <fstream>
 #include <limits>
 #include <stdexcept>
+#include "shell/Grep.hpp"
 
 namespace shell {
 
@@ -53,6 +54,9 @@ CommandResult Builtins::runIfBuiltin(
     }
     if (cmd_name == "wc") {
         return cmdWc(argv, io);
+    }
+    if (cmd_name == "grep") {
+        return cmdGrep(argv, io);
     }
     if (cmd_name == "exit") {
         return cmdExit(argv, io, last_exit_code);
@@ -180,6 +184,11 @@ CommandResult Builtins::cmdExit(
     }
     io.err << "exit: too many arguments\n";
     return {2, false};
+}
+
+CommandResult
+Builtins::cmdGrep(const std::vector<std::string> &argv, IOStreams io) {
+    return runGrep(argv, io);
 }
 
 }  // namespace shell
