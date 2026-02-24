@@ -13,11 +13,8 @@
 
 namespace shell {
 
-static void pumpFdToStream(
-    int fd,
-    std::ostream &stream,
-    std::mutex &stream_mutex
-) {
+static void
+pumpFdToStream(int fd, std::ostream &stream, std::mutex &stream_mutex) {
     constexpr size_t kBufSize = 4096;
     char buf[kBufSize];
 

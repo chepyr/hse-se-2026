@@ -42,7 +42,7 @@ void ShellApp::printPromptIfInteractive() const {
 int ShellApp::run() {
 #if !defined(_WIN32)
     if (Utils::isInteractiveStdin()) {
-        struct sigaction sa {};
+        struct sigaction sa{};
         sa.sa_handler = sigint_handler;
         sigemptyset(&sa.sa_mask);
         sa.sa_flags = 0;  // no SA_RESTART: let read() return on Ctrl+C

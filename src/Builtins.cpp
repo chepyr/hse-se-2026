@@ -145,8 +145,7 @@ Builtins::cmdWc(const std::vector<std::string> &argv, IOStreams io) {
                 ++line_count;
             }
 
-            bool is_space =
-                (std::isspace(static_cast<unsigned char>(ch)) != 0);
+            bool is_space = (std::isspace(static_cast<unsigned char>(ch)) != 0);
             if (is_space) {
                 in_word = false;
             } else if (!in_word) {
