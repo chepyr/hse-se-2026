@@ -103,12 +103,12 @@ std::string Environment::get(const std::string &name) const {
 }
 
 std::vector<std::string> Environment::snapshot() const {
-    std::vector<std::string> out;
-    out.reserve(vars_.size());
-    for (const auto &[k, v] : vars_) {
-        out.push_back(k + "=" + v);
+    std::vector<std::string> entries;
+    entries.reserve(vars_.size());
+    for (const auto &[name, value] : vars_) {
+        entries.push_back(name + "=" + value);
     }
-    return out;
+    return entries;
 }
 
 }  // namespace shell

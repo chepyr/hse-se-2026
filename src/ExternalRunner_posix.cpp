@@ -13,37 +13,41 @@
 
 namespace shell {
 
-static void writeAllFromFdToStream(int fd, std::ostream &os, std::mutex &mtx) {
+static void pumpFdToStream(
+    int fd,
+    std::ostream &stream,
+    std::mutex &stream_mutex
+) {
     constexpr size_t kBufSize = 4096;
     char buf[kBufSize];
 
     while (true) {
-        ssize_t n = ::read(fd, buf, kBufSize);
-        if (n == 0) {
-            break;  // EOF
+        ssize_t bytes_read = ::read(fd, buf, kBufSize);
+        if (bytes_read == 0) {
+            break;
         }
-        if (n < 0) {
+        if (bytes_read < 0) {
             if (errno == EINTR) {
                 continue;
             }
             break;
         }
-        std::lock_guard<std::mutex> lk(mtx);
-        os.write(buf, n);
-        os.flush();
+        std::lock_guard<std::mutex> lock(stream_mutex);
+        stream.write(buf, bytes_read);
+        stream.flush();
     }
 }
 
-static void setChildEnvironment(const std::vector<std::string> &env_snapshot) {
-    for (const std::string &kv : env_snapshot) {
-        auto pos = kv.find('=');
-        if (pos == std::string::npos) {
+static void applyEnvironment(const std::vector<std::string> &env_snapshot) {
+    for (const std::string &entry : env_snapshot) {
+        auto eq_pos = entry.find('=');
+        if (eq_pos == std::string::npos) {
             continue;
         }
 
-        std::string key = kv.substr(0, pos);
-        std::string val = kv.substr(pos + 1);
-        ::setenv(key.c_str(), val.c_str(), 1);  // overwrite = 1
+        std::string key = entry.substr(0, eq_pos);
+        std::string value = entry.substr(eq_pos + 1);
+        ::setenv(key.c_str(), value.c_str(), 1);
     }
 }
 
@@ -52,8 +56,9 @@ CommandResult ExternalRunner::run(
     const std::vector<std::string> &env_snapshot,
     IOStreams io
 ) {
-    if (argv.empty()) {
-        return {2, false};
+    if (argv.empty() || argv[0].empty()) {
+        io.err << "command not found\n";
+        return {127, false};
     }
 
     int out_pipe[2]{-1, -1};
@@ -90,34 +95,33 @@ CommandResult ExternalRunner::run(
         ::close(err_pipe[0]);
         ::close(err_pipe[1]);
 
-        setChildEnvironment(env_snapshot);
+        applyEnvironment(env_snapshot);
 
-        std::vector<char *> cargv;
-        cargv.reserve(argv.size() + 1);
-        for (const auto &s : argv) {
-            cargv.push_back(const_cast<char *>(s.c_str()));
+        std::vector<char *> exec_argv;
+        exec_argv.reserve(argv.size() + 1);
+        for (const auto &arg : argv) {
+            exec_argv.push_back(const_cast<char *>(arg.c_str()));
         }
-        cargv.push_back(nullptr);
+        exec_argv.push_back(nullptr);
 
-        ::execvp(cargv[0], cargv.data());
+        ::execvp(exec_argv[0], exec_argv.data());
 
-        // exec failed
-        const char *msg = std::strerror(errno);
-        ::write(STDERR_FILENO, msg, std::strlen(msg));
+        const char *err_msg = std::strerror(errno);
+        ::write(STDERR_FILENO, err_msg, std::strlen(err_msg));
         ::write(STDERR_FILENO, "\n", 1);
         _exit(127);
     }
 
-    // Parent
     ::close(out_pipe[1]);
     ::close(err_pipe[1]);
 
-    std::mutex out_mtx, err_mtx;
-    std::thread t_out([&]() {
-        writeAllFromFdToStream(out_pipe[0], io.out, out_mtx);
+    std::mutex stdout_mutex;
+    std::mutex stderr_mutex;
+    std::thread stdout_thread([&]() {
+        pumpFdToStream(out_pipe[0], io.out, stdout_mutex);
     });
-    std::thread t_err([&]() {
-        writeAllFromFdToStream(err_pipe[0], io.err, err_mtx);
+    std::thread stderr_thread([&]() {
+        pumpFdToStream(err_pipe[0], io.err, stderr_mutex);
     });
 
     int status = 0;
@@ -131,43 +135,44 @@ CommandResult ExternalRunner::run(
     ::close(out_pipe[0]);
     ::close(err_pipe[0]);
 
-    t_out.join();
-    t_err.join();
+    stdout_thread.join();
+    stderr_thread.join();
 
-    int code = 0;
+    int exit_code = 0;
     if (WIFEXITED(status)) {
-        code = WEXITSTATUS(status);
+        exit_code = WEXITSTATUS(status);
     } else if (WIFSIGNALED(status)) {
-        code = 128 + WTERMSIG(status);
+        exit_code = 128 + WTERMSIG(status);
     } else {
-        code = 127;
+        exit_code = 127;
     }
 
-    return {code, false};
+    return {exit_code, false};
 }
 
 void ExternalRunner::execInChild(
     const std::vector<std::string> &argv,
     const std::vector<std::string> &env_snapshot
 ) {
-    if (argv.empty()) {
-        _exit(2);
+    if (argv.empty() || argv[0].empty()) {
+        const char *msg = "command not found\n";
+        ::write(STDERR_FILENO, msg, std::strlen(msg));
+        _exit(127);
     }
 
-    setChildEnvironment(env_snapshot);
+    applyEnvironment(env_snapshot);
 
-    std::vector<char *> cargv;
-    cargv.reserve(argv.size() + 1);
-    for (const auto &s : argv) {
-        cargv.push_back(const_cast<char *>(s.c_str()));
+    std::vector<char *> exec_argv;
+    exec_argv.reserve(argv.size() + 1);
+    for (const auto &arg : argv) {
+        exec_argv.push_back(const_cast<char *>(arg.c_str()));
     }
-    cargv.push_back(nullptr);
+    exec_argv.push_back(nullptr);
 
-    ::execvp(cargv[0], cargv.data());
+    ::execvp(exec_argv[0], exec_argv.data());
 
-    // exec failed
-    const char *msg = std::strerror(errno);
-    ::write(STDERR_FILENO, msg, std::strlen(msg));
+    const char *err_msg = std::strerror(errno);
+    ::write(STDERR_FILENO, err_msg, std::strlen(err_msg));
     ::write(STDERR_FILENO, "\n", 1);
     _exit(127);
 }

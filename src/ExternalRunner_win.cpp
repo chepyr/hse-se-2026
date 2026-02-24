@@ -111,8 +111,9 @@ CommandResult ExternalRunner::run(
     const std::vector<std::string> &env_snapshot,
     IOStreams io
 ) {
-    if (argv.empty()) {
-        return {2, false};
+    if (argv.empty() || argv[0].empty()) {
+        io.err << "command not found\n";
+        return {127, false};
     }
 
     SECURITY_ATTRIBUTES sa{};

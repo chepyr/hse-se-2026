@@ -48,106 +48,98 @@ expandVar(const std::string &line, size_t &i, const Environment &env) {
 
 TokenizeResult
 Tokenizer::tokenize(const std::string &line, const Environment &env) {
-    TokenizeResult res;
-    res.ok = false;
+    TokenizeResult result;
+    result.ok = false;
 
     enum class State { Normal, InSingle, InDouble };
-    State st = State::Normal;
+    State state = State::Normal;
 
     std::vector<std::string> tokens;
-    std::string cur;
-    bool have_token = false;
+    std::string current_token;
+    bool has_token = false;
 
-    auto push_token = [&]() {
-        if (have_token) {
-            tokens.push_back(cur);
-            cur.clear();
-            have_token = false;
+    auto flush_token = [&]() {
+        if (has_token) {
+            tokens.push_back(current_token);
+            current_token.clear();
+            has_token = false;
         }
     };
 
     for (size_t i = 0; i < line.size(); ++i) {
         const char ch = line[i];
 
-        if (st == State::Normal) {
-            // Check for pipe separator
+        if (state == State::Normal) {
             if (ch == '|') {
-                push_token();
+                flush_token();
                 tokens.push_back("|");
                 continue;
             }
 
-            // Check for quotes
             if (ch == '\'') {
-                st = State::InSingle;
-                have_token = true;
+                state = State::InSingle;
+                has_token = true;
                 continue;
             }
             if (ch == '"') {
-                st = State::InDouble;
-                have_token = true;
+                state = State::InDouble;
+                has_token = true;
                 continue;
             }
 
-            // Check for whitespace
             if (std::isspace(static_cast<unsigned char>(ch)) != 0) {
-                push_token();
+                flush_token();
                 continue;
             }
 
-            // Check for variable substitution
             if (ch == '$') {
-                std::string value = expandVar(line, i, env);
-                cur.append(value);
-                have_token = true;
-                --i;  // expandVar leaves i one position past last char
+                std::string expanded = expandVar(line, i, env);
+                current_token.append(expanded);
+                has_token = true;
+                --i;
                 continue;
             }
 
-            // Regular character
-            cur.push_back(ch);
-            have_token = true;
+            current_token.push_back(ch);
+            has_token = true;
 
-        } else if (st == State::InSingle) {
-            // Inside single quotes - no substitution
+        } else if (state == State::InSingle) {
             if (ch == '\'') {
-                st = State::Normal;
+                state = State::Normal;
                 continue;
             }
-            cur.push_back(ch);
-            have_token = true;
+            current_token.push_back(ch);
+            has_token = true;
 
-        } else {  // InDouble
-            // Inside double quotes - with substitution
+        } else {
             if (ch == '"') {
-                st = State::Normal;
+                state = State::Normal;
                 continue;
             }
 
-            // Check for variable substitution in double quotes
             if (ch == '$') {
-                std::string value = expandVar(line, i, env);
-                cur.append(value);
-                have_token = true;
-                --i;  // expandVar leaves i one position past last char
+                std::string expanded = expandVar(line, i, env);
+                current_token.append(expanded);
+                has_token = true;
+                --i;
                 continue;
             }
 
-            cur.push_back(ch);
-            have_token = true;
+            current_token.push_back(ch);
+            has_token = true;
         }
     }
 
-    if (st != State::Normal) {
-        res.error = "Unterminated quote";
-        return res;
+    if (state != State::Normal) {
+        result.error = "Unterminated quote";
+        return result;
     }
 
-    push_token();
+    flush_token();
 
-    res.ok = true;
-    res.tokens = std::move(tokens);
-    return res;
+    result.ok = true;
+    result.tokens = std::move(tokens);
+    return result;
 }
 
 }  // namespace shell

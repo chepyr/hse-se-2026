@@ -1,33 +1,31 @@
 #include "shell/Builtins.hpp"
 #include <cctype>
-#include <cerrno>
 #include <filesystem>
 #include <fstream>
-#include <iostream>
 #include <limits>
-#include <sstream>
+#include <stdexcept>
 
 namespace shell {
 
-// Parses a base-10 integer into `out`. Returns false on invalid input or
-// overflow.
-static bool parseInt(const std::string &s, int &out) {
-    if (s.empty()) {
+static bool parseInt(const std::string &str, int &out) {
+    if (str.empty()) {
         return false;
     }
-    std::size_t idx = 0;
+    std::size_t pos = 0;
     try {
-        long v = std::stol(s, &idx, 10);
-        if (idx != s.size()) {
+        long value = std::stol(str, &pos, 10);
+        if (pos != str.size()) {
             return false;
         }
-        if (v < std::numeric_limits<int>::min() ||
-            v > std::numeric_limits<int>::max()) {
+        if (value < std::numeric_limits<int>::min() ||
+            value > std::numeric_limits<int>::max()) {
             return false;
         }
-        out = static_cast<int>(v);
+        out = static_cast<int>(value);
         return true;
-    } catch (...) {
+    } catch (const std::invalid_argument &) {
+        return false;
+    } catch (const std::out_of_range &) {
         return false;
     }
 }
@@ -37,31 +35,30 @@ CommandResult Builtins::runIfBuiltin(
     IOStreams io,
     int last_exit_code
 ) {
-    CommandResult unknown;
-    unknown.exit_code = -1;
+    static constexpr int kNotBuiltin = -1;
 
     if (argv.empty()) {
-        return unknown;
+        return {kNotBuiltin, false};
     }
 
-    const std::string &name = argv[0];
-    if (name == "echo") {
+    const std::string &cmd_name = argv[0];
+    if (cmd_name == "echo") {
         return cmdEcho(argv, io);
     }
-    if (name == "pwd") {
+    if (cmd_name == "pwd") {
         return cmdPwd(io);
     }
-    if (name == "cat") {
+    if (cmd_name == "cat") {
         return cmdCat(argv, io);
     }
-    if (name == "wc") {
+    if (cmd_name == "wc") {
         return cmdWc(argv, io);
     }
-    if (name == "exit") {
+    if (cmd_name == "exit") {
         return cmdExit(argv, io, last_exit_code);
     }
 
-    return unknown;
+    return {kNotBuiltin, false};
 }
 
 CommandResult
@@ -89,73 +86,81 @@ CommandResult Builtins::cmdPwd(IOStreams io) {
 
 CommandResult
 Builtins::cmdCat(const std::vector<std::string> &argv, IOStreams io) {
-    // If no arguments, read from stdin (useful in pipelines)
-    if (argv.size() == 1) {
-        io.out << io.in.rdbuf();
+    try {
+        if (argv.size() == 1) {
+            io.out << io.in.rdbuf();
+            return {0, false};
+        }
+
+        if (argv.size() != 2) {
+            io.err << "cat: expected zero or one file argument\n";
+            return {2, false};
+        }
+
+        const std::string &file_path = argv[1];
+        std::ifstream file_stream(file_path, std::ios::binary);
+        if (!file_stream) {
+            io.err << "cat: " << file_path << ": cannot open file\n";
+            return {1, false};
+        }
+
+        io.out << file_stream.rdbuf();
         return {0, false};
-    }
-
-    if (argv.size() != 2) {
-        io.err << "cat: expected zero or one file argument\n";
-        return {2, false};
-    }
-
-    const std::string &path = argv[1];
-    std::ifstream in(path, std::ios::binary);
-    if (!in) {
-        io.err << "cat: " << path << ": cannot open file\n";
+    } catch (const std::exception &ex) {
+        io.err << "cat: " << ex.what() << '\n';
         return {1, false};
     }
-
-    io.out << in.rdbuf();
-    return {0, false};
 }
 
 CommandResult
 Builtins::cmdWc(const std::vector<std::string> &argv, IOStreams io) {
-    std::istream *input = nullptr;
-    std::ifstream file_in;
+    try {
+        std::istream *input = nullptr;
+        std::ifstream file_stream;
 
-    // If no arguments, read from stdin (useful in pipelines)
-    if (argv.size() == 1) {
-        input = &io.in;
-    } else if (argv.size() == 2) {
-        const std::string &path = argv[1];
-        file_in.open(path, std::ios::binary);
-        if (!file_in) {
-            io.err << "wc: " << path << ": cannot open file\n";
-            return {1, false};
+        if (argv.size() == 1) {
+            input = &io.in;
+        } else if (argv.size() == 2) {
+            const std::string &file_path = argv[1];
+            file_stream.open(file_path, std::ios::binary);
+            if (!file_stream) {
+                io.err << "wc: " << file_path << ": cannot open file\n";
+                return {1, false};
+            }
+            input = &file_stream;
+        } else {
+            io.err << "wc: expected zero or one file argument\n";
+            return {2, false};
         }
-        input = &file_in;
-    } else {
-        io.err << "wc: expected zero or one file argument\n";
-        return {2, false};
+
+        std::uint64_t line_count = 0;
+        std::uint64_t word_count = 0;
+        std::uint64_t byte_count = 0;
+
+        bool in_word = false;
+        char ch = '\0';
+        while (input->get(ch)) {
+            ++byte_count;
+            if (ch == '\n') {
+                ++line_count;
+            }
+
+            bool is_space =
+                (std::isspace(static_cast<unsigned char>(ch)) != 0);
+            if (is_space) {
+                in_word = false;
+            } else if (!in_word) {
+                in_word = true;
+                ++word_count;
+            }
+        }
+
+        io.out << line_count << ' ' << word_count << ' ' << byte_count << '\n';
+        return {0, false};
+    } catch (const std::exception &ex) {
+        io.err << "wc: " << ex.what() << '\n';
+        return {1, false};
     }
-
-    std::uint64_t lines = 0;
-    std::uint64_t words = 0;
-    std::uint64_t bytes = 0;
-
-    bool in_word = false;
-    char ch;
-    while (input->get(ch)) {
-        ++bytes;
-        if (ch == '\n') {
-            ++lines;
-        }
-
-        unsigned char uc = static_cast<unsigned char>(ch);
-        bool is_space = (std::isspace(uc) != 0);
-        if (is_space) {
-            in_word = false;
-        } else if (!in_word) {
-            in_word = true;
-            ++words;
-        }
-    }
-
-    io.out << lines << ' ' << words << ' ' << bytes << '\n';
-    return {0, false};
 }
 
 CommandResult Builtins::cmdExit(
