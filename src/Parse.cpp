@@ -1,5 +1,6 @@
 #include "shell/Parse.hpp"
 #include <cstddef>
+#include "shell/Environment.hpp"
 #include "shell/Tokenizer.hpp"
 #include "shell/Utils.hpp"
 
@@ -24,37 +25,59 @@ static bool isAssignmentOnlyToken(
     return Utils::isValidEnvName(name);
 }
 
-ParsedLine parseLine(const std::string &line) {
-    ParsedLine parsed;
-    parsed.ok = false;
+ParsedLine parseLine(const std::string &line, const Environment &env) {
+    ParsedLine result;
+    result.ok = false;
 
-    auto t = Tokenizer::tokenize(line);
-    if (!t.ok) {
-        parsed.error = t.error;
-        return parsed;
+    TokenizeResult token_result = Tokenizer::tokenize(line, env);
+    if (!token_result.ok) {
+        result.error = token_result.error;
+        return result;
     }
 
-    if (t.tokens.empty()) {
-        parsed.ok = true;
-        parsed.is_empty = true;
-        return parsed;
+    if (token_result.tokens.empty()) {
+        result.ok = true;
+        result.is_empty = true;
+        return result;
     }
 
-    // HW2: support assignment-only form NAME=VALUE as a single token line.
-    if (t.tokens.size() == 1) {
-        std::string name, value;
-        if (isAssignmentOnlyToken(t.tokens[0], name, value)) {
-            parsed.ok = true;
-            parsed.is_assignment_only = true;
-            parsed.assign_name = std::move(name);
-            parsed.assign_value = std::move(value);
-            return parsed;
+    if (token_result.tokens.size() == 1) {
+        std::string name;
+        std::string value;
+        if (isAssignmentOnlyToken(token_result.tokens[0], name, value)) {
+            result.ok = true;
+            result.is_assignment_only = true;
+            result.assign_name = std::move(name);
+            result.assign_value = std::move(value);
+            return result;
         }
     }
 
-    parsed.ok = true;
-    parsed.argv = std::move(t.tokens);
-    return parsed;
+    std::vector<CommandSpec> commands;
+    CommandSpec current_cmd;
+
+    for (const auto &token : token_result.tokens) {
+        if (token == "|") {
+            if (current_cmd.argv.empty()) {
+                result.error = "Empty command before pipe";
+                return result;
+            }
+            commands.push_back(std::move(current_cmd));
+            current_cmd = CommandSpec{};
+        } else {
+            current_cmd.argv.push_back(token);
+        }
+    }
+
+    if (current_cmd.argv.empty()) {
+        result.error = "Empty command after pipe";
+        return result;
+    }
+    commands.push_back(std::move(current_cmd));
+
+    result.ok = true;
+    result.pipeline = std::move(commands);
+    return result;
 }
 
 }  // namespace shell

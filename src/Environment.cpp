@@ -94,13 +94,21 @@ void Environment::set(const std::string &name, const std::string &value) {
     vars_[name] = value;
 }
 
-std::vector<std::string> Environment::snapshot() const {
-    std::vector<std::string> out;
-    out.reserve(vars_.size());
-    for (const auto &[k, v] : vars_) {
-        out.push_back(k + "=" + v);
+std::string Environment::get(const std::string &name) const {
+    auto it = vars_.find(name);
+    if (it != vars_.end()) {
+        return it->second;
     }
-    return out;
+    return "";
+}
+
+std::vector<std::string> Environment::snapshot() const {
+    std::vector<std::string> entries;
+    entries.reserve(vars_.size());
+    for (const auto &[name, value] : vars_) {
+        entries.push_back(name + "=" + value);
+    }
+    return entries;
 }
 
 }  // namespace shell

@@ -19,24 +19,28 @@ struct TokenizeResult final {
 };
 
 /**
- * @brief Splits a command line into tokens, supporting single and double
- * quotes.
+ * @brief Splits a command line into tokens, supporting quotes and variable
+ * substitution.
  *
  * This tokenizer supports:
  * - Whitespace splitting outside quotes
- * - '...' and "..." where everything inside becomes part of one token
- * - Empty quoted strings produce an empty token ("" -> "")
+ * - '...' (single quotes - no substitution)
+ * - "..." (double quotes - with substitution)
+ * - $VAR and ${VAR} variable substitution
+ * - Pipe character | as a special separator token
  *
- * This HW2 tokenizer does not interpret escapes or substitutions.
+ * Empty quoted strings produce an empty token ("" -> "")
  */
 class Tokenizer final {
 public:
     /**
-     * @brief Tokenize one input line.
+     * @brief Tokenize one input line with variable substitution.
      * @param line Input command line.
+     * @param env Environment for variable substitution.
      * @return TokenizeResult with tokens or an error.
      */
-    static TokenizeResult tokenize(const std::string &line);
+    static TokenizeResult
+    tokenize(const std::string &line, const class Environment &env);
 };
 
 }  // namespace shell

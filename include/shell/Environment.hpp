@@ -28,6 +28,13 @@ public:
     void set(const std::string &name, const std::string &value);
 
     /**
+     * @brief Gets an environment variable value.
+     * @param name Variable name.
+     * @return Variable value if exists, empty string otherwise.
+     */
+    std::string get(const std::string &name) const;
+
+    /**
      * @brief Returns a snapshot of the environment as a vector of "NAME=VALUE"
      * strings.
      *
